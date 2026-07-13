@@ -137,18 +137,18 @@ local State = {
     destroying = false
 }
 
--- ==================== firesignal FIX ====================
+-- ==================== firesignal FIX (corrected) ====================
 local function firesignal(event, ...)
     if not event then return end
+    local args = {...}
     if event:IsA("RemoteEvent") then
-        pcall(event.FireServer, event, ...)
+        pcall(event.FireServer, event, table.unpack(args))
     elseif event:IsA("BindableEvent") then
-        pcall(event.Fire, event, ...)
+        pcall(event.Fire, event, table.unpack(args))
     else
-        -- Fallback: try calling OnClientEvent if it exists (unlikely)
         pcall(function()
             if event.OnClientEvent then
-                event.OnClientEvent(...)
+                event.OnClientEvent(table.unpack(args))
             end
         end)
     end
