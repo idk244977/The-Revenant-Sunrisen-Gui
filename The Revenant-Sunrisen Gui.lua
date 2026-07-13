@@ -1,3 +1,6 @@
+-- The Revenant: Sunrisen – All-in-One Utility
+-- Made using Linoria Lib UI
+
 if _G.RevenantGui_Kill then
     _G.RevenantGui_Kill = true
     task.wait(0.2)
@@ -101,6 +104,7 @@ local orbitSpeed = 0.1
 local orbitAngle = 0
 local orbitConn = nil
 
+local childAddConn, childRemConn = nil, nil
 local destroying = false
 
 -- ==================== HELPERS ====================
@@ -176,17 +180,7 @@ local function restoreAutoRotate()
     end
 end
 
-local function connectFolderListeners()
-    if childAddConn then pcall(childAddConn.Disconnect, childAddConn) end
-    if childRemConn then pcall(childRemConn.Disconnect, childRemConn) end
-    childAddConn = npcFolder.ChildAdded:Connect(onNPCAdded)
-    childRemConn = npcFolder.ChildRemoved:Connect(onNPCRemoved)
-end
-local function disconnectFolderListeners()
-    if childAddConn then pcall(childAddConn.Disconnect, childAddConn); childAddConn = nil end
-    if childRemConn then pcall(childRemConn.Disconnect, childRemConn); childRemConn = nil end
-end
-
+-- ==================== FOLDER LISTENERS ====================
 local function onNPCAdded(child)
     if child:IsA("Model") then
         if hitboxEnabled then applyHitboxToModel(child) end
@@ -199,6 +193,18 @@ local function onNPCRemoved(child)
         if espEnabled then removeESP(child) end
     end
 end
+
+local function connectFolderListeners()
+    if childAddConn then pcall(childAddConn.Disconnect, childAddConn) end
+    if childRemConn then pcall(childRemConn.Disconnect, childRemConn) end
+    childAddConn = npcFolder.ChildAdded:Connect(onNPCAdded)
+    childRemConn = npcFolder.ChildRemoved:Connect(onNPCRemoved)
+end
+local function disconnectFolderListeners()
+    if childAddConn then pcall(childAddConn.Disconnect, childAddConn); childAddConn = nil end
+    if childRemConn then pcall(childRemConn.Disconnect, childRemConn); childRemConn = nil end
+end
+connectFolderListeners()
 
 -- ==================== HITBOX ====================
 local function applyHitboxPart(part)
@@ -1722,4 +1728,4 @@ player.CharacterAdded:Connect(function()
     if espEnabled then applyESPAll() end
 end)
 
-print("The Revenant: Sunrisen Gui loaded successfully! Made by idk244977.")
+print("The Revenant: Sunrisen Gui loaded successfully!")
