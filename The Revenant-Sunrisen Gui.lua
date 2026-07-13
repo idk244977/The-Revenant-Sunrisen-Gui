@@ -1,4 +1,4 @@
--- The Revenant: Sunrisen – All-in-One Utility
+-- The Revenant: Sunrisen Gui
 -- Made using Linoria Lib UI
 
 if _G.RevenantGui_Kill then
