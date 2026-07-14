@@ -1,6 +1,6 @@
 -- The Revenant: Sunrisen Gui
 -- Made using Linoria Lib UI
--- Mobile support added
+-- Mobile support
 
 if _G.RevenantGui_Kill then
     _G.RevenantGui_Kill = true
@@ -1380,6 +1380,13 @@ local Window = Library:CreateWindow({
     MenuFadeTime = 0.2
 })
 
+-- On mobile, disable drag to avoid touch conflicts
+if IS_MOBILE and Window and Window.Frame then
+    Window.Frame.Draggable = false
+    -- Also make the window slightly larger for touch
+    Window.Frame.Size = UDim2.new(0, 450, 0, 550)
+end
+
 local gui = playerGui:FindFirstChild("Linoria")
 if gui then gui.Name = "RevenantSunrisenGui" end
 
@@ -1855,61 +1862,87 @@ player.CharacterAdded:Connect(function()
     if State.espEnabled then applyESPAll() end
 end)
 
--- ==================== MOBILE FLOATING BUTTON ====================
+-- ==================== MOBILE TOGGLE BUTTON (FIXED) ====================
 if IS_MOBILE then
+    -- Wait for Linoria GUI to exist
+    local linoriaGui = playerGui:WaitForChild("Linoria")
+
+    -- Create toggle button GUI
     local toggleGui = Instance.new("ScreenGui")
     toggleGui.Name = "MobileToggleGui"
     toggleGui.ResetOnSpawn = false
     toggleGui.Parent = playerGui
+    toggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    local toggleBtn = Instance.new("ImageButton")
-    toggleBtn.Size = UDim2.new(0, 60, 0, 60)
-    toggleBtn.Position = UDim2.new(1, -70, 0, 10)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    toggleBtn.BackgroundTransparency = 0.2
-    toggleBtn.BorderSizePixel = 0
-    toggleBtn.Image = "rbxassetid://6031090980"
-    toggleBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.Parent = toggleGui
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 80, 0, 80)
+    frame.Position = UDim2.new(1, -90, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BackgroundTransparency = 0.1
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    frame.Parent = toggleGui
 
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = "Close"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 16
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = frame
+
+    -- Update text based on GUI visibility
+    local function updateButtonText()
+        btn.Text = linoriaGui.Enabled and "Close" or "Open"
+    end
+    updateButtonText()
+
+    -- Toggle function
+    local function toggleGuiVisibility()
+        linoriaGui.Enabled = not linoriaGui.Enabled
+        updateButtonText()
+    end
+
+    -- Connect both touch and mouse clicks
+    btn.MouseButton1Click:Connect(toggleGuiVisibility)
+    btn.TouchTap:Connect(toggleGuiVisibility)
+
+    -- Make the frame draggable on mobile
     local dragging = false
-    local dragStartPos, dragStartOffset
+    local dragStart, frameStart
 
-    toggleBtn.InputBegan:Connect(function(input, gameProcessed)
+    frame.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            dragStartPos = input.Position
-            dragStartOffset = toggleBtn.Position
+            dragStart = input.Position
+            frameStart = frame.Position
         end
     end)
 
-    toggleBtn.InputChanged:Connect(function(input, gameProcessed)
+    frame.InputChanged:Connect(function(input, gameProcessed)
         if gameProcessed or not dragging then return end
-        if input.UserInputType == Enum.UserInputType.Touch then
-            local delta = input.Position - dragStartPos
-            toggleBtn.Position = UDim2.new(
-                dragStartOffset.X.Scale,
-                dragStartOffset.X.Offset + delta.X,
-                dragStartOffset.Y.Scale,
-                dragStartOffset.Y.Offset + delta.Y
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                frameStart.X.Scale,
+                frameStart.X.Offset + delta.X,
+                frameStart.Y.Scale,
+                frameStart.Y.Offset + delta.Y
             )
         end
     end)
 
-    toggleBtn.InputEnded:Connect(function(input, gameProcessed)
+    frame.InputEnded:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
-            local now = input.Position
-            if (now - dragStartPos).Magnitude < 20 then
-                local linoriaGui = playerGui:FindFirstChild("Linoria")
-                if linoriaGui then
-                    linoriaGui.Enabled = not linoriaGui.Enabled
-                end
-            end
         end
     end)
+
+    -- Also update button text when the GUI is toggled elsewhere (e.g., via keybind)
+    linoriaGui:GetPropertyChangedSignal("Enabled"):Connect(updateButtonText)
 end
 
 -- ==================== DEVICE NOTIFICATION ====================
