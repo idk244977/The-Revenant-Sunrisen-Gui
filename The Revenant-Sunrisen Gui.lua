@@ -1,5 +1,6 @@
 -- The Revenant: Sunrisen Gui
 -- Made using Linoria Lib UI
+-- Mobile support added
 
 if _G.RevenantGui_Kill then
     _G.RevenantGui_Kill = true
@@ -19,8 +20,12 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
+-- ==================== DEVICE CHECK ====================
+local IS_MOBILE = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 -- ==================== CONFIG ====================
 local NPC_FOLDER_NAME = "NPCs"
@@ -476,10 +481,9 @@ local function disableNoRecoil()
     end
 end
 
--- ==================== SHED ESP (FIXED: use specific part) ====================
+-- ==================== SHED ESP (FIXED) ====================
 local function onShedAdded(model)
     if model.Name == "Shed" and model:IsA("Model") and not State.shedHighlights[model] then
-        -- Find a suitable part for the highlight
         local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
         if not adornPart then return end
 
@@ -532,7 +536,7 @@ local function stopShedESP()
     State.shedHighlights, State.shedBillboards = {}, {}
 end
 
--- ==================== AIRDROP ESP (FIXED: use specific part) ====================
+-- ==================== AIRDROP ESP (FIXED) ====================
 local function onAirdropAdded(model)
     if model.Name == "Airdrop" and model:IsA("Model") and not State.airdropHighlights[model] then
         local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
@@ -587,7 +591,7 @@ local function stopAirdropESP()
     State.airdropHighlights, State.airdropBillboards = {}, {}
 end
 
--- ==================== BLACK MARKET ESP (FIXED: use specific part) ====================
+-- ==================== BLACK MARKET ESP (FIXED) ====================
 local function isBlackMarket(instance)
     if not instance or not instance:IsA("Model") then return false end
     if instance.Name ~= "BlackMarket" then return false end
@@ -877,8 +881,8 @@ local function stopFullbright()
 end
 
 -- ==================== INSTANT PROX. PROMPTS (with exception) ====================
-local INSTANT_PROX_DURATION = 0  -- default: instant click
-local EXCEPTION_PROX_DURATION = 0.0001  -- for PowerStation.Core
+local INSTANT_PROX_DURATION = 0
+local EXCEPTION_PROX_DURATION = 0.0001
 
 local function isPowerStationPrompt(prompt)
     if not prompt or not prompt:IsA("ProximityPrompt") then return false end
@@ -1851,4 +1855,64 @@ player.CharacterAdded:Connect(function()
     if State.espEnabled then applyESPAll() end
 end)
 
-print("The Revenant: Sunrisen Gui loaded successfully!")
+-- ==================== MOBILE FLOATING BUTTON ====================
+if IS_MOBILE then
+    local toggleGui = Instance.new("ScreenGui")
+    toggleGui.Name = "MobileToggleGui"
+    toggleGui.ResetOnSpawn = false
+    toggleGui.Parent = playerGui
+
+    local toggleBtn = Instance.new("ImageButton")
+    toggleBtn.Size = UDim2.new(0, 60, 0, 60)
+    toggleBtn.Position = UDim2.new(1, -70, 0, 10)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    toggleBtn.BackgroundTransparency = 0.2
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Image = "rbxassetid://6031090980"
+    toggleBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Parent = toggleGui
+
+    local dragging = false
+    local dragStartPos, dragStartOffset
+
+    toggleBtn.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStartPos = input.Position
+            dragStartOffset = toggleBtn.Position
+        end
+    end)
+
+    toggleBtn.InputChanged:Connect(function(input, gameProcessed)
+        if gameProcessed or not dragging then return end
+        if input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStartPos
+            toggleBtn.Position = UDim2.new(
+                dragStartOffset.X.Scale,
+                dragStartOffset.X.Offset + delta.X,
+                dragStartOffset.Y.Scale,
+                dragStartOffset.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    toggleBtn.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            local now = input.Position
+            if (now - dragStartPos).Magnitude < 20 then
+                local linoriaGui = playerGui:FindFirstChild("Linoria")
+                if linoriaGui then
+                    linoriaGui.Enabled = not linoriaGui.Enabled
+                end
+            end
+        end
+    end)
+end
+
+-- ==================== DEVICE NOTIFICATION ====================
+local deviceType = IS_MOBILE and "Mobile" or "PC"
+Library:Notify(string.format("Script loaded. Device: %s", deviceType), 3)
+print("The Revenant: Sunrisen Gui loaded successfully! Device: " .. deviceType)
