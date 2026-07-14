@@ -1,5 +1,4 @@
--- The Revenant: Sunrisen Gui
--- Made using Linoria Lib UI
+-- The Revenant:
 
 if _G.RevenantGui_Kill then
     _G.RevenantGui_Kill = true
