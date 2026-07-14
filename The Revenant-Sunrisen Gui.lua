@@ -27,51 +27,54 @@ local NPC_FOLDER_NAME = "NPCs"
 local HEAD_SIZE_MAX = 6.2
 local AMMO_LOOP_DELAY = 0.3
 
+-- ==================== CAPTURE ORIGINAL LIGHTING ====================
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
 -- ==================== STATE TABLE ====================
 local State = {
-    -- hitbox
     originalSizes = {},
     selectionBoxes = {},
     hitboxConns = {},
     hitboxEnabled = false,
     hitboxSize = HEAD_SIZE_MAX,
 
-    -- ESP
     espHighlights = {},
     espBillboards = {},
     distanceConn = nil,
     espEnabled = false,
 
-    -- Shed
     shedESPActive = false,
     shedHighlights = {},
     shedBillboards = {},
     shedChildAddedConn = nil,
     shedChildRemovedConn = nil,
 
-    -- Airdrop
     airdropESPActive = false,
     airdropHighlights = {},
     airdropBillboards = {},
     airdropChildAddedConn = nil,
     airdropChildRemovedConn = nil,
 
-    -- Black Market
     blackMarketESPActive = false,
     blackMarketHighlights = {},
     blackMarketBillboards = {},
     blackMarketDescAddedConn = nil,
     blackMarketDescRemovedConn = nil,
 
-    -- Structure notifier
     structNotifierActive = false,
+    structNotifierConnections = {},
 
-    -- Ammo
     ammoLoopRunning = false,
     ammoLoopThread = nil,
     ammoLoopActive = false,
 
-    -- Scrap ESP
     scrapESPActive = false,
     scrapHighlights = {},
     scrapBillboards = {},
@@ -79,87 +82,74 @@ local State = {
     scrapRemovedConn = nil,
     scrapESPTypes = { Common = true, Shiny = true, Golden = true, Cursed = true },
 
-    -- Scrap TP
     scrapTPActive = false,
     scrapTPThread = nil,
     scrapTPStop = false,
     scrapTPTypes = { Common = false, Shiny = false, Golden = true },
 
-    -- Barbed wire
     barbedWireActive = false,
     hiddenBarbedWire = {},
     barbedWireChildConn = nil,
 
-    -- Ragdoll
     ragdollActive = false,
     hiddenRagdoll = {},
     ragdollChildConn = nil,
 
-    -- Speed boost
-    speedBoostActive = false,
-    speedBoostValue = 16,
-    speedBoostLoopThread = nil,
-    speedBoostLoopRunning = false,
-
-    -- Fullbright
     fullbrightActive = false,
     fullbrightConnection = nil,
-    originalLighting = {
-        Brightness = Lighting.Brightness,
-        ClockTime = Lighting.ClockTime,
-        FogEnd = Lighting.FogEnd,
-        GlobalShadows = Lighting.GlobalShadows,
-        Ambient = Lighting.Ambient,
-        OutdoorAmbient = Lighting.OutdoorAmbient
-    },
+    originalLighting = originalLighting,
 
-    -- Instant prompts
     instantProxActive = false,
     originalPromptDurations = {},
     instantProxAddedConn = nil,
 
-    -- Head teleport
-    headTeleportActive = false,
-    headTeleportHeight = 6.5,
-    headTeleportConn = nil,
-
-    -- Orbit
     orbitActive = false,
     orbitRadius = 80,
     orbitSpeed = 0.1,
     orbitAngle = 0,
     orbitConn = nil,
 
-    -- Folder listeners
     childAddConn = nil,
     childRemConn = nil,
 
     destroying = false
 }
 
--- ==================== firesignal FIX (corrected) ====================
-local function firesignal(event, ...)
-    if not event then return end
-    local args = {...}
-    if event:IsA("RemoteEvent") then
-        pcall(event.FireServer, event, table.unpack(args))
-    elseif event:IsA("BindableEvent") then
-        pcall(event.Fire, event, table.unpack(args))
-    else
-        pcall(function()
-            if event.OnClientEvent then
-                event.OnClientEvent(table.unpack(args))
-            end
-        end)
+-- ==================== FORCE CLEANUP ON START ====================
+local function cleanupAll()
+    for _, model in ipairs(State.hitboxConns) do
+        for _, c in ipairs(model) do pcall(c.Disconnect) end
     end
+    State.hitboxConns = {}
+    for part, sz in pairs(State.originalSizes) do
+        if part and part:IsA("BasePart") then
+            part.Size = sz
+            part.CanCollide = true
+        end
+    end
+    State.originalSizes = {}
+    for _, box in pairs(State.selectionBoxes) do pcall(box.Destroy, box) end
+    State.selectionBoxes = {}
+
+    for _, hl in pairs(State.espHighlights) do pcall(hl.Destroy, hl) end
+    State.espHighlights = {}
+    for _, bb in pairs(State.espBillboards) do pcall(bb.Destroy, bb) end
+    State.espBillboards = {}
+    if State.distanceConn then pcall(State.distanceConn.Disconnect, State.distanceConn); State.distanceConn = nil end
 end
+cleanupAll()
+State.hitboxEnabled = false
+State.espEnabled = false
+
+-- ==================== NO LOCAL firesignal – USE EXECUTOR'S GLOBAL ====================
 
 -- ==================== HELPERS ====================
 local function getHead(model)
-    return model:FindFirstChild("Head")
+    return model and model:FindFirstChild("Head")
 end
 
 local function getNPCFolder()
+    if not Workspace then return nil end
     local folder = Workspace:FindFirstChild(NPC_FOLDER_NAME)
     if not folder then
         folder = Instance.new("Folder")
@@ -169,9 +159,13 @@ local function getNPCFolder()
     return folder
 end
 local npcFolder = getNPCFolder()
+if not npcFolder then
+    warn("Failed to create NPC folder – workspace not ready")
+end
 
 local function getAllNPCs()
     local npcs = {}
+    if not npcFolder then return npcs end
     for _, child in ipairs(npcFolder:GetChildren()) do
         if child:FindFirstChild("Head") then
             table.insert(npcs, child)
@@ -227,33 +221,7 @@ local function restoreAutoRotate()
     end
 end
 
--- ==================== FOLDER LISTENERS ====================
-local function onNPCAdded(child)
-    if child:IsA("Model") then
-        if State.hitboxEnabled then applyHitboxToModel(child) end
-        if State.espEnabled then createESP(child) end
-    end
-end
-local function onNPCRemoved(child)
-    if child:IsA("Model") then
-        if State.hitboxEnabled then removeHitboxFromModel(child) end
-        if State.espEnabled then removeESP(child) end
-    end
-end
-
-local function connectFolderListeners()
-    if State.childAddConn then pcall(State.childAddConn.Disconnect, State.childAddConn) end
-    if State.childRemConn then pcall(State.childRemConn.Disconnect, State.childRemConn) end
-    State.childAddConn = npcFolder.ChildAdded:Connect(onNPCAdded)
-    State.childRemConn = npcFolder.ChildRemoved:Connect(onNPCRemoved)
-end
-local function disconnectFolderListeners()
-    if State.childAddConn then pcall(State.childAddConn.Disconnect, State.childAddConn); State.childAddConn = nil end
-    if State.childRemConn then pcall(State.childRemConn.Disconnect, State.childRemConn); State.childRemConn = nil end
-end
-connectFolderListeners()
-
--- ==================== HITBOX ====================
+-- ==================== HITBOX FUNCTIONS ====================
 local function applyHitboxPart(part)
     if not part or not part:IsA("BasePart") then return end
     if not State.originalSizes[part] then State.originalSizes[part] = part.Size end
@@ -327,6 +295,7 @@ local function removeHitboxFromModel(model)
 end
 
 local function applyHitboxAll()
+    if not npcFolder then return end
     for _, m in ipairs(npcFolder:GetChildren()) do
         if m:IsA("Model") then applyHitboxToModel(m) end
     end
@@ -341,7 +310,7 @@ local function removeHitboxAll()
     State.selectionBoxes = {}
 end
 
--- ==================== NPC ESP ====================
+-- ==================== NPC ESP FUNCTIONS ====================
 local function createESP(model)
     if not model or not model:IsA("Model") or State.espHighlights[model] then return end
     local hl = Instance.new("Highlight")
@@ -380,6 +349,7 @@ local function removeESP(model)
 end
 
 local function applyESPAll()
+    if not npcFolder then return end
     for _, m in ipairs(npcFolder:GetChildren()) do
         if m:IsA("Model") then createESP(m) end
     end
@@ -418,7 +388,7 @@ local function removeESPAll()
     if State.distanceConn then pcall(State.distanceConn.Disconnect, State.distanceConn); State.distanceConn = nil end
 end
 
--- ==================== AMMO ====================
+-- ==================== AMMO (USING GLOBAL firesignal) ====================
 local function getEquippedTool()
     local char = player.Character
     if char then
@@ -440,7 +410,7 @@ local function giveAmmoOnce()
     if not tool then return end
     local signal = tool:FindFirstChild("Signal")
     if signal and signal:IsA("RemoteEvent") then
-        pcall(firesignal, signal, "HandleAmmo", {Type = "ToMax"})
+        pcall(firesignal, signal.OnClientEvent, "HandleAmmo", { Type = "ToMax" })
     end
 end
 
@@ -463,26 +433,65 @@ local function stopAmmoLoop()
     if State.ammoLoopThread then State.ammoLoopThread = nil end
 end
 
--- ==================== INFINITE STAMINA ====================
+-- ==================== INFINITE STAMINA (USING GLOBAL firesignal) ====================
 local function getInfStamina()
-    local remoteEvent = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("I__NFSTA_AXDLOL")
+    local events = ReplicatedStorage:FindFirstChild("Events")
+    if not events then
+        Library:Notify("Events folder not found!", 2)
+        return
+    end
+    local remoteEvent = events:FindFirstChild("I__NFSTA_AXDLOL")
     if remoteEvent and remoteEvent:IsA("RemoteEvent") then
-        pcall(firesignal, remoteEvent, true, math.huge)
+        pcall(firesignal, remoteEvent.OnClientEvent, true, math.huge)
+        Library:Notify("Infinite Stamina activated!", 2)
+    else
+        Library:Notify("Stamina remote not found!", 2)
     end
 end
 
--- ==================== SHED ESP ====================
+-- ==================== NO RECOIL ====================
+local recoilModulePath = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("GunSystem") and ReplicatedStorage.Modules.GunSystem:FindFirstChild("Shared") and ReplicatedStorage.Modules.GunSystem.Shared:FindFirstChild("Recoil")
+local Recoil = recoilModulePath and require(recoilModulePath)
+local originalAccelerate = nil
+
+local function enableNoRecoil()
+    if not Recoil then
+        Library:Notify("Recoil module not found!", 2)
+        return
+    end
+    if not originalAccelerate then
+        originalAccelerate = Recoil.Accelerate
+        Recoil.Accelerate = function(self, ...)
+            return {}
+        end
+        Library:Notify("No Recoil enabled", 2)
+    end
+end
+
+local function disableNoRecoil()
+    if Recoil and originalAccelerate then
+        Recoil.Accelerate = originalAccelerate
+        originalAccelerate = nil
+        Library:Notify("No Recoil disabled", 2)
+    end
+end
+
+-- ==================== SHED ESP (FIXED: use specific part) ====================
 local function onShedAdded(model)
     if model.Name == "Shed" and model:IsA("Model") and not State.shedHighlights[model] then
+        -- Find a suitable part for the highlight
+        local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
+        if not adornPart then return end
+
         local hl = Instance.new("Highlight")
         hl.FillColor = Color3.fromRGB(0, 255, 255)
         hl.OutlineColor = Color3.fromRGB(255, 255, 255)
         hl.FillTransparency = 0.3
         hl.OutlineTransparency = 0
-        hl.Adornee = model
-        hl.Parent = model
+        hl.Adornee = adornPart
+        hl.Parent = adornPart
         State.shedHighlights[model] = hl
-        local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head")
+
         local bb = Instance.new("BillboardGui")
         bb.Size = UDim2.new(0, 80, 0, 20)
         bb.StudsOffset = Vector3.new(0, 3, 0)
@@ -498,11 +507,8 @@ local function onShedAdded(model)
         lbl.Font = Enum.Font.GothamBold
         lbl.TextSize = 10
         lbl.Parent = bb
-        bb.Parent = root or model
+        bb.Parent = adornPart
         State.shedBillboards[model] = bb
-        if State.structNotifierActive then
-            Library:Notify("Shed spawned!", 3)
-        end
     end
 end
 local function onShedRemoved(model)
@@ -526,18 +532,21 @@ local function stopShedESP()
     State.shedHighlights, State.shedBillboards = {}, {}
 end
 
--- ==================== AIRDROP ESP ====================
+-- ==================== AIRDROP ESP (FIXED: use specific part) ====================
 local function onAirdropAdded(model)
     if model.Name == "Airdrop" and model:IsA("Model") and not State.airdropHighlights[model] then
+        local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
+        if not adornPart then return end
+
         local hl = Instance.new("Highlight")
         hl.FillColor = Color3.fromRGB(255, 0, 255)
         hl.OutlineColor = Color3.fromRGB(255, 255, 0)
         hl.FillTransparency = 0.2
         hl.OutlineTransparency = 0
-        hl.Adornee = model
-        hl.Parent = model
+        hl.Adornee = adornPart
+        hl.Parent = adornPart
         State.airdropHighlights[model] = hl
-        local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head")
+
         local bb = Instance.new("BillboardGui")
         bb.Size = UDim2.new(0, 90, 0, 20)
         bb.StudsOffset = Vector3.new(0, 3, 0)
@@ -553,11 +562,8 @@ local function onAirdropAdded(model)
         lbl.Font = Enum.Font.GothamBold
         lbl.TextSize = 10
         lbl.Parent = bb
-        bb.Parent = root or model
+        bb.Parent = adornPart
         State.airdropBillboards[model] = bb
-        if State.structNotifierActive then
-            Library:Notify("Airdrop spawned!", 3)
-        end
     end
 end
 local function onAirdropRemoved(model)
@@ -581,7 +587,7 @@ local function stopAirdropESP()
     State.airdropHighlights, State.airdropBillboards = {}, {}
 end
 
--- ==================== BLACK MARKET ESP ====================
+-- ==================== BLACK MARKET ESP (FIXED: use specific part) ====================
 local function isBlackMarket(instance)
     if not instance or not instance:IsA("Model") then return false end
     if instance.Name ~= "BlackMarket" then return false end
@@ -597,15 +603,18 @@ local function isBlackMarket(instance)
 end
 local function applyBlackMarketESP(instance)
     if not isBlackMarket(instance) or State.blackMarketHighlights[instance] then return end
+    local adornPart = instance:FindFirstChild("HumanoidRootPart") or instance.PrimaryPart or instance:FindFirstChild("Head") or instance:FindFirstChildWhichIsA("BasePart")
+    if not adornPart then return end
+
     local hl = Instance.new("Highlight")
     hl.FillColor = Color3.fromRGB(255, 255, 0)
     hl.OutlineColor = Color3.fromRGB(255, 255, 255)
     hl.FillTransparency = 0.2
     hl.OutlineTransparency = 0
-    hl.Adornee = instance
-    hl.Parent = instance
+    hl.Adornee = adornPart
+    hl.Parent = adornPart
     State.blackMarketHighlights[instance] = hl
-    local root = instance:FindFirstChild("HumanoidRootPart") or instance.PrimaryPart or instance:FindFirstChild("Head")
+
     local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 120, 0, 20)
     bb.StudsOffset = Vector3.new(0, 3, 0)
@@ -621,11 +630,8 @@ local function applyBlackMarketESP(instance)
     lbl.Font = Enum.Font.GothamBold
     lbl.TextSize = 10
     lbl.Parent = bb
-    bb.Parent = root or instance
+    bb.Parent = adornPart
     State.blackMarketBillboards[instance] = bb
-    if State.structNotifierActive then
-        Library:Notify("Black Market spawned!", 3)
-    end
 end
 local function removeBlackMarketESP(instance)
     if State.blackMarketHighlights[instance] then State.blackMarketHighlights[instance]:Destroy(); State.blackMarketHighlights[instance] = nil end
@@ -654,11 +660,83 @@ local function stopBlackMarketESP()
 end
 
 -- ==================== STRUCTURE NOTIFIER ====================
-local function startStructNotifier()
-    State.structNotifierActive = true
+local function notifyShed(model)
+    if model.Name == "Shed" and model:IsA("Model") then
+        Library:Notify("Shed spawned!", 3)
+    end
 end
+local function notifyAirdrop(model)
+    if model.Name == "Airdrop" and model:IsA("Model") then
+        Library:Notify("Airdrop spawned!", 3)
+    end
+end
+local function notifyBlackMarket(instance)
+    if isBlackMarket(instance) then
+        Library:Notify("Black Market spawned!", 3)
+    end
+end
+local function notifyCursedScrap(scrapObject)
+    if scrapObject and scrapObject:IsA("Model") then
+        local prompt = scrapObject:FindFirstChild("ProximityPrompt", true)
+        if prompt and prompt:IsA("ProximityPrompt") then
+            local typ = getScrapType(prompt)
+            if typ == "Cursed" then
+                Library:Notify("Cursed Scrap spawned!", Color3.fromRGB(255,0,0))
+            end
+        end
+    end
+end
+
+local function startStructNotifier()
+    if State.structNotifierActive then return end
+    State.structNotifierActive = true
+    local shedConn = Workspace.ChildAdded:Connect(notifyShed)
+    local airdropConn = Workspace.ChildAdded:Connect(notifyAirdrop)
+    local blackMarketConn = Workspace.DescendantAdded:Connect(function(desc)
+        if isBlackMarket(desc) then
+            Library:Notify("Black Market spawned!", 3)
+        end
+    end)
+    local scrapFolder = getScrapFolder()
+    local scrapConn
+    if scrapFolder then
+        scrapConn = scrapFolder.DescendantAdded:Connect(function(desc)
+            if desc:IsA("ProximityPrompt") then
+                local parentModel = desc.Parent and desc.Parent.Parent
+                if parentModel then
+                    notifyCursedScrap(parentModel)
+                end
+            end
+        end)
+    end
+    State.structNotifierConnections = { shedConn, airdropConn, blackMarketConn, scrapConn }
+    for _, child in ipairs(Workspace:GetChildren()) do
+        notifyShed(child)
+        notifyAirdrop(child)
+    end
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if isBlackMarket(desc) then
+            Library:Notify("Black Market spawned!", 3)
+        end
+    end
+    if scrapFolder then
+        for _, prompt in ipairs(scrapFolder:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                local parentModel = prompt.Parent and prompt.Parent.Parent
+                if parentModel then
+                    notifyCursedScrap(parentModel)
+                end
+            end
+        end
+    end
+end
+
 local function stopStructNotifier()
     State.structNotifierActive = false
+    for _, conn in ipairs(State.structNotifierConnections) do
+        if conn then pcall(conn.Disconnect, conn) end
+    end
+    State.structNotifierConnections = {}
 end
 
 -- ==================== BARBED WIRE REMOVER ====================
@@ -755,42 +833,7 @@ local function stopRagdollRemover()
     restoreRagdollParts()
 end
 
--- ==================== SPEED BOOST (LOOP) ====================
-local function speedBoostLoop()
-    while State.speedBoostLoopRunning and State.speedBoostActive do
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChild("Humanoid")
-            if hum then
-                hum.WalkSpeed = State.speedBoostValue
-            end
-        end
-        task.wait(0.1)
-    end
-end
-local function startSpeedBoost()
-    if State.speedBoostLoopRunning then return end
-    State.speedBoostActive = true
-    State.speedBoostLoopRunning = true
-    State.speedBoostLoopThread = task.spawn(speedBoostLoop)
-end
-local function stopSpeedBoost()
-    State.speedBoostActive = false
-    State.speedBoostLoopRunning = false
-    if State.speedBoostLoopThread then
-        task.cancel(State.speedBoostLoopThread)
-        State.speedBoostLoopThread = nil
-    end
-    local char = player.Character
-    if char then
-        local hum = char:FindFirstChild("Humanoid")
-        if hum then
-            hum.WalkSpeed = 16
-        end
-    end
-end
-
--- ==================== FULLBRIGHT ====================
+-- ==================== FULLBRIGHT (restores fog when off) ====================
 local function applyFullbright()
     if State.fullbrightActive then
         Lighting.Brightness = 1
@@ -800,20 +843,30 @@ local function applyFullbright()
         Lighting.Ambient = Color3.fromRGB(178, 178, 178)
         Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
     else
-        Lighting.Brightness = State.originalLighting.Brightness
-        Lighting.ClockTime = State.originalLighting.ClockTime
-        Lighting.FogEnd = State.originalLighting.FogEnd
-        Lighting.GlobalShadows = State.originalLighting.GlobalShadows
-        Lighting.Ambient = State.originalLighting.Ambient
-        Lighting.OutdoorAmbient = State.originalLighting.OutdoorAmbient
+        Lighting.Brightness = State.originalLighting.Brightness or 1
+        Lighting.ClockTime = State.originalLighting.ClockTime or 12
+        Lighting.FogEnd = State.originalLighting.FogEnd or 786543
+        Lighting.GlobalShadows = State.originalLighting.GlobalShadows ~= nil and State.originalLighting.GlobalShadows or false
+        Lighting.Ambient = State.originalLighting.Ambient or Color3.fromRGB(178, 178, 178)
+        Lighting.OutdoorAmbient = State.originalLighting.OutdoorAmbient or Color3.fromRGB(178, 178, 178)
     end
 end
+
 local function startFullbright()
     if State.fullbrightConnection then return end
+    State.originalLighting = {
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd,
+        GlobalShadows = Lighting.GlobalShadows,
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient
+    }
     State.fullbrightActive = true
     State.fullbrightConnection = RunService.Heartbeat:Connect(applyFullbright)
     applyFullbright()
 end
+
 local function stopFullbright()
     State.fullbrightActive = false
     if State.fullbrightConnection then
@@ -823,7 +876,27 @@ local function stopFullbright()
     applyFullbright()
 end
 
--- ==================== INSTANT PROX. PROMPTS ====================
+-- ==================== INSTANT PROX. PROMPTS (with exception) ====================
+local INSTANT_PROX_DURATION = 0  -- default: instant click
+local EXCEPTION_PROX_DURATION = 0.0001  -- for PowerStation.Core
+
+local function isPowerStationPrompt(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return false end
+    local core = prompt.Parent
+    if not core or core.Name ~= "Core" then return false end
+    local powerStation = core.Parent
+    if not powerStation or powerStation.Name ~= "PowerStation" then return false end
+    local structures = powerStation.Parent
+    if not structures or structures.Name ~= "Structures" then return false end
+    local main = structures.Parent
+    if not main or main.Name ~= "MAIN" then return false end
+    local map = main.Parent
+    if not map or map.Name ~= "MAP" then return false end
+    local ws = map.Parent
+    if ws ~= Workspace then return false end
+    return true
+end
+
 local function setPromptDuration(prompt, duration)
     if not prompt or not prompt:IsA("ProximityPrompt") then return end
     if not State.originalPromptDurations[prompt] then
@@ -831,11 +904,16 @@ local function setPromptDuration(prompt, duration)
     end
     prompt.HoldDuration = duration
 end
+
 local function applyInstantProx()
     for _, prompt in ipairs(Workspace:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") then
             if State.instantProxActive then
-                setPromptDuration(prompt, 0)
+                local duration = INSTANT_PROX_DURATION
+                if isPowerStationPrompt(prompt) then
+                    duration = EXCEPTION_PROX_DURATION
+                end
+                setPromptDuration(prompt, duration)
             else
                 if State.originalPromptDurations[prompt] then
                     prompt.HoldDuration = State.originalPromptDurations[prompt]
@@ -845,16 +923,22 @@ local function applyInstantProx()
         end
     end
 end
+
 local function startInstantProx()
     if State.instantProxActive then return end
     State.instantProxActive = true
     applyInstantProx()
     State.instantProxAddedConn = Workspace.DescendantAdded:Connect(function(desc)
         if State.instantProxActive and desc:IsA("ProximityPrompt") then
-            setPromptDuration(desc, 0)
+            local duration = INSTANT_PROX_DURATION
+            if isPowerStationPrompt(desc) then
+                duration = EXCEPTION_PROX_DURATION
+            end
+            setPromptDuration(desc, duration)
         end
     end)
 end
+
 local function stopInstantProx()
     State.instantProxActive = false
     if State.instantProxAddedConn then
@@ -862,33 +946,6 @@ local function stopInstantProx()
         State.instantProxAddedConn = nil
     end
     applyInstantProx()
-end
-
--- ==================== HEAD TELEPORT ====================
-local function startHeadTeleport()
-    if State.headTeleportConn then return end
-    State.headTeleportActive = true
-    State.headTeleportConn = RunService.Stepped:Connect(function()
-        if not State.headTeleportActive then return end
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        local npc = findNearestNPC()
-        if not npc then return end
-        local head = npc:FindFirstChild("Head")
-        if not head or not head:IsA("BasePart") then return end
-        local targetPos = head.Position + Vector3.new(0, State.headTeleportHeight, 0)
-        hrp.CFrame = CFrame.new(targetPos)
-        stabilizeCharacter()
-    end)
-end
-local function stopHeadTeleport()
-    State.headTeleportActive = false
-    if State.headTeleportConn then
-        State.headTeleportConn:Disconnect()
-        State.headTeleportConn = nil
-    end
-    restoreAutoRotate()
 end
 
 -- ==================== ORBIT SPIN ====================
@@ -937,10 +994,6 @@ local function getScrapColor(scrapType)
     elseif scrapType == "Cursed" then return Color3.fromRGB(255, 0, 0)
     end
     return Color3.fromRGB(255,255,255)
-end
-local function isScrapPrompt(prompt)
-    if not prompt or not prompt:IsA("ProximityPrompt") then return false end
-    return getScrapType(prompt) ~= nil
 end
 local function getBasePartFromScrap(scrapObject)
     if not scrapObject then return nil end
@@ -1036,10 +1089,6 @@ local function applyScrapESP(scrapObject)
     lbl.Parent = bb
     bb.Parent = base
     State.scrapBillboards[scrapObject] = bb
-
-    if scrapType == "Cursed" and State.structNotifierActive then
-        Library:Notify("Cursed Scrap spawned!", Color3.fromRGB(255,0,0))
-    end
 end
 local function removeScrapESP(scrapObject)
     if State.scrapHighlights[scrapObject] then
@@ -1261,6 +1310,37 @@ local function teleportToStructure(name, strictParentCheck)
     Library:Notify("Teleported to " .. name, 2)
 end
 
+-- ==================== FOLDER LISTENERS ====================
+local function onNPCAdded(child)
+    if child:IsA("Model") then
+        if State.hitboxEnabled then applyHitboxToModel(child) end
+        if State.espEnabled then createESP(child) end
+    end
+end
+
+local function onNPCRemoved(child)
+    if child:IsA("Model") then
+        if State.hitboxEnabled then removeHitboxFromModel(child) end
+        if State.espEnabled then removeESP(child) end
+    end
+end
+
+local function connectFolderListeners()
+    if State.childAddConn then pcall(State.childAddConn.Disconnect, State.childAddConn) end
+    if State.childRemConn then pcall(State.childRemConn.Disconnect, State.childRemConn) end
+    if npcFolder then
+        State.childAddConn = npcFolder.ChildAdded:Connect(onNPCAdded)
+        State.childRemConn = npcFolder.ChildRemoved:Connect(onNPCRemoved)
+    end
+end
+
+local function disconnectFolderListeners()
+    if State.childAddConn then pcall(State.childAddConn.Disconnect, State.childAddConn); State.childAddConn = nil end
+    if State.childRemConn then pcall(State.childRemConn.Disconnect, State.childRemConn); State.childRemConn = nil end
+end
+
+connectFolderListeners()
+
 -- ==================== DESTROY ====================
 local function destroyEverything()
     if State.destroying or _G.RevenantGui_Kill then return end
@@ -1275,11 +1355,12 @@ local function destroyEverything()
     stopBarbedWireRemover()
     stopRagdollRemover()
     stopStructNotifier()
-    stopSpeedBoost()
     stopFullbright()
     stopInstantProx()
-    stopHeadTeleport()
     stopOrbit()
+    if Toggles and Toggles.NoRecoil and Toggles.NoRecoil.Value then
+        disableNoRecoil()
+    end
     if State.espEnabled then removeESPAll() end
     if State.hitboxEnabled then removeHitboxAll() end
     disconnectFolderListeners()
@@ -1300,7 +1381,7 @@ if gui then gui.Name = "RevenantSunrisenGui" end
 
 local Tabs = {
     Main = Window:AddTab('Main'),
-    Scraps = Window:AddTab('Scraps'),
+    Scraps = Window:AddTab('Scraps & Teleports'),
     ['UI Settings'] = Window:AddTab('UI Settings'),
 }
 
@@ -1318,7 +1399,11 @@ local hitboxToggle = MainLeft:AddToggle('Hitbox', {
 hitboxToggle:AddKeyPicker('HitboxKey', { Default = '', Mode = 'Toggle', Text = 'Hitbox Key', SyncToggleState = false })
 Toggles.Hitbox:OnChanged(function()
     State.hitboxEnabled = Toggles.Hitbox.Value
-    if State.hitboxEnabled then applyHitboxAll() else removeHitboxAll() end
+    if State.hitboxEnabled then
+        applyHitboxAll()
+    else
+        removeHitboxAll()
+    end
 end)
 if Options.HitboxKey then
     Options.HitboxKey:OnClick(function() Toggles.Hitbox:SetValue(not Toggles.Hitbox.Value) end)
@@ -1347,35 +1432,15 @@ local npcEspToggle = MainLeft:AddToggle('NPCESP', {
 npcEspToggle:AddKeyPicker('NPCESPKey', { Default = '', Mode = 'Toggle', Text = 'NPC ESP Key', SyncToggleState = false })
 Toggles.NPCESP:OnChanged(function()
     State.espEnabled = Toggles.NPCESP.Value
-    if State.espEnabled then applyESPAll() else removeESPAll() end
+    if State.espEnabled then
+        applyESPAll()
+    else
+        removeESPAll()
+    end
 end)
 if Options.NPCESPKey then
     Options.NPCESPKey:OnClick(function() Toggles.NPCESP:SetValue(not Toggles.NPCESP.Value) end)
 end
-
--- Head Teleport
-local headTeleportToggle = MainLeft:AddToggle('HeadTeleport', {
-    Text = 'Head Teleport',
-    Default = false,
-})
-headTeleportToggle:AddKeyPicker('HeadTeleportKey', { Default = '', Mode = 'Toggle', Text = 'Head TP Key', SyncToggleState = false })
-Toggles.HeadTeleport:OnChanged(function()
-    if Toggles.HeadTeleport.Value then startHeadTeleport() else stopHeadTeleport() end
-end)
-if Options.HeadTeleportKey then
-    Options.HeadTeleportKey:OnClick(function() Toggles.HeadTeleport:SetValue(not Toggles.HeadTeleport.Value) end)
-end
-
-MainLeft:AddSlider('HeadTeleportHeight', {
-    Text = 'Height Offset',
-    Default = 6.5,
-    Min = 0,
-    Max = 20,
-    Rounding = 1,
-})
-Options.HeadTeleportHeight:OnChanged(function()
-    State.headTeleportHeight = Options.HeadTeleportHeight.Value
-end)
 
 -- Orbit Spin
 local orbitToggle = MainLeft:AddToggle('OrbitSpin', {
@@ -1426,31 +1491,26 @@ if Options.LoopAmmoKey then
     Options.LoopAmmoKey:OnClick(function() Toggles.LoopAmmo:SetValue(not Toggles.LoopAmmo.Value) end)
 end
 
--- Player Utilities
-MainRightBottom:AddButton('Infinite Stamina', getInfStamina)
-
--- Speed Boost
-local speedToggle = MainRightBottom:AddToggle('SpeedBoost', {
-    Text = 'Speed Boost',
+-- No Recoil
+local noRecoilToggle = MainMiddle:AddToggle('NoRecoil', {
+    Text = 'No Recoil',
     Default = false,
 })
-speedToggle:AddKeyPicker('SpeedKey', { Default = '', Mode = 'Toggle', Text = 'Speed Key', SyncToggleState = false })
-Toggles.SpeedBoost:OnChanged(function()
-    if Toggles.SpeedBoost.Value then startSpeedBoost() else stopSpeedBoost() end
+noRecoilToggle:AddKeyPicker('NoRecoilKey', { Default = '', Mode = 'Toggle', Text = 'No Recoil Key', SyncToggleState = false })
+Toggles.NoRecoil:OnChanged(function()
+    if Toggles.NoRecoil.Value then
+        enableNoRecoil()
+    else
+        disableNoRecoil()
+    end
 end)
-if Options.SpeedKey then
-    Options.SpeedKey:OnClick(function() Toggles.SpeedBoost:SetValue(not Toggles.SpeedBoost.Value) end)
+if Options.NoRecoilKey then
+    Options.NoRecoilKey:OnClick(function() Toggles.NoRecoil:SetValue(not Toggles.NoRecoil.Value) end)
 end
 
-MainRightBottom:AddSlider('SpeedValue', {
-    Text = 'Speed',
-    Default = 16,
-    Min = 0,
-    Max = 60,
-    Rounding = 1,
-})
-Options.SpeedValue:OnChanged(function()
-    State.speedBoostValue = Options.SpeedValue.Value
+-- Player Utilities
+MainRightBottom:AddButton('Infinite Stamina', function()
+    getInfStamina()
 end)
 
 -- Fullbright
@@ -1552,7 +1612,7 @@ if Options.RagdollKey then
     Options.RagdollKey:OnClick(function() Toggles.RemoveRagdoll:SetValue(not Toggles.RemoveRagdoll.Value) end)
 end
 
--- ===== SCRAPS TAB =====
+-- ===== SCRAPS & TELEPORTS TAB =====
 local ScrapLeft = Tabs.Scraps:AddLeftGroupbox('Scrap ESP')
 local ScrapRight = Tabs.Scraps:AddRightGroupbox('Scrap TP & Teleports')
 
@@ -1746,15 +1806,31 @@ SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
 
--- ===== INITIAL LOAD / CLEANUP =====
-Library:OnUnload(function()
-    destroyEverything()
-end)
+-- ===== AFTER LOADING CONFIG: FORCE CORRECT STATES =====
+if not Toggles.Hitbox.Value then
+    State.hitboxEnabled = false
+    removeHitboxAll()
+else
+    State.hitboxEnabled = true
+    applyHitboxAll()
+end
 
--- Apply saved toggles
-if Toggles.Hitbox.Value then State.hitboxEnabled = true; applyHitboxAll() end
-if Toggles.NPCESP.Value then State.espEnabled = true; applyESPAll() end
+if not Toggles.NPCESP.Value then
+    State.espEnabled = false
+    removeESPAll()
+else
+    State.espEnabled = true
+    applyESPAll()
+end
+
+if not Toggles.Fullbright.Value then
+    stopFullbright()
+else
+    startFullbright()
+end
+
 if Toggles.LoopAmmo.Value then startAmmoLoop() end
+if Toggles.NoRecoil.Value then enableNoRecoil() end
 if Toggles.ShedESP.Value then startShedESP() end
 if Toggles.AirdropESP.Value then startAirdropESP() end
 if Toggles.BlackMarketESP.Value then startBlackMarketESP() end
@@ -1763,13 +1839,13 @@ if Toggles.RemoveBarbedWire.Value then startBarbedWireRemover() end
 if Toggles.RemoveRagdoll.Value then startRagdollRemover() end
 if Toggles.ScrapESP.Value then startScrapESP() end
 if Toggles.ScrapTP.Value then startScrapTP() end
-if Toggles.SpeedBoost.Value then startSpeedBoost() end
-if Toggles.Fullbright.Value then startFullbright() end
 if Toggles.InstantProx.Value then startInstantProx() end
-if Toggles.HeadTeleport.Value then startHeadTeleport() end
 if Toggles.OrbitSpin.Value then startOrbit() end
 
--- Reapply on player respawn
+Library:OnUnload(function()
+    destroyEverything()
+end)
+
 player.CharacterAdded:Connect(function()
     if State.hitboxEnabled then applyHitboxAll() end
     if State.espEnabled then applyESPAll() end
