@@ -1,6 +1,5 @@
--- The Revenant: Sunrisen Gui
+-- The Revenant: Sunrisen Gui (PC version)
 -- Made using Linoria Lib UI
--- Mobile support
 
 if _G.RevenantGui_Kill then
     _G.RevenantGui_Kill = true
@@ -20,12 +19,8 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
-local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-
--- ==================== DEVICE CHECK ====================
-local IS_MOBILE = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 -- ==================== CONFIG ====================
 local NPC_FOLDER_NAME = "NPCs"
@@ -300,6 +295,7 @@ local function removeHitboxFromModel(model)
 end
 
 local function applyHitboxAll()
+    if not State.hitboxEnabled then return end
     if not npcFolder then return end
     for _, m in ipairs(npcFolder:GetChildren()) do
         if m:IsA("Model") then applyHitboxToModel(m) end
@@ -349,11 +345,18 @@ end
 
 local function removeESP(model)
     if not model then return end
-    if State.espHighlights[model] then State.espHighlights[model]:Destroy(); State.espHighlights[model] = nil end
-    if State.espBillboards[model] then State.espBillboards[model]:Destroy(); State.espBillboards[model] = nil end
+    if State.espHighlights[model] then
+        State.espHighlights[model]:Destroy()
+        State.espHighlights[model] = nil
+    end
+    if State.espBillboards[model] then
+        State.espBillboards[model]:Destroy()
+        State.espBillboards[model] = nil
+    end
 end
 
 local function applyESPAll()
+    if not State.espEnabled then return end
     if not npcFolder then return end
     for _, m in ipairs(npcFolder:GetChildren()) do
         if m:IsA("Model") then createESP(m) end
@@ -386,11 +389,18 @@ local function applyESPAll()
 end
 
 local function removeESPAll()
-    for model, hl in pairs(State.espHighlights) do hl:Destroy() end
+    for model, hl in pairs(State.espHighlights) do
+        if hl then hl:Destroy() end
+    end
     State.espHighlights = {}
-    for model, bb in pairs(State.espBillboards) do bb:Destroy() end
+    for model, bb in pairs(State.espBillboards) do
+        if bb then bb:Destroy() end
+    end
     State.espBillboards = {}
-    if State.distanceConn then pcall(State.distanceConn.Disconnect, State.distanceConn); State.distanceConn = nil end
+    if State.distanceConn then
+        State.distanceConn:Disconnect()
+        State.distanceConn = nil
+    end
 end
 
 -- ==================== AMMO (USING GLOBAL firesignal) ====================
@@ -481,51 +491,51 @@ local function disableNoRecoil()
     end
 end
 
--- ==================== SHED ESP (FIXED) ====================
+-- ==================== SHED ESP ====================
 local function onShedAdded(model)
-    if model.Name == "Shed" and model:IsA("Model") and not State.shedHighlights[model] then
-        local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
-        if not adornPart then return end
+    if not model:IsA("Model") or model.Name ~= "Shed" then return end
+    if State.shedHighlights[model] then return end
+    local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
+    if not adornPart then return end
 
-        local hl = Instance.new("Highlight")
-        hl.FillColor = Color3.fromRGB(0, 255, 255)
-        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-        hl.FillTransparency = 0.3
-        hl.OutlineTransparency = 0
-        hl.Adornee = adornPart
-        hl.Parent = adornPart
-        State.shedHighlights[model] = hl
+    local hl = Instance.new("Highlight")
+    hl.FillColor = Color3.fromRGB(0, 255, 255)
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.FillTransparency = 0.3
+    hl.OutlineTransparency = 0
+    hl.Adornee = model
+    hl.Parent = model
+    State.shedHighlights[model] = hl
 
-        local bb = Instance.new("BillboardGui")
-        bb.Size = UDim2.new(0, 80, 0, 20)
-        bb.StudsOffset = Vector3.new(0, 3, 0)
-        bb.AlwaysOnTop = true
-        bb.ResetOnSpawn = false
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = "SHED"
-        lbl.TextColor3 = Color3.fromRGB(0, 255, 255)
-        lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        lbl.TextStrokeTransparency = 0
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 10
-        lbl.Parent = bb
-        bb.Parent = adornPart
-        State.shedBillboards[model] = bb
-    end
+    local bb = Instance.new("BillboardGui")
+    bb.Size = UDim2.new(0, 80, 0, 20)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.ResetOnSpawn = false
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "SHED"
+    lbl.TextColor3 = Color3.fromRGB(0, 255, 255)
+    lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    lbl.TextStrokeTransparency = 0
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 10
+    lbl.Parent = bb
+    bb.Parent = adornPart
+    State.shedBillboards[model] = bb
 end
 local function onShedRemoved(model)
-    if model.Name ~= "Shed" then return end
+    if not model:IsA("Model") or model.Name ~= "Shed" then return end
     if State.shedHighlights[model] then State.shedHighlights[model]:Destroy(); State.shedHighlights[model] = nil end
     if State.shedBillboards[model] then State.shedBillboards[model]:Destroy(); State.shedBillboards[model] = nil end
 end
 local function startShedESP()
     if State.shedESPActive then return end
     State.shedESPActive = true
-    State.shedChildAddedConn = Workspace.ChildAdded:Connect(onShedAdded)
-    State.shedChildRemovedConn = Workspace.ChildRemoved:Connect(onShedRemoved)
-    for _, child in ipairs(Workspace:GetChildren()) do onShedAdded(child) end
+    State.shedChildAddedConn = Workspace.DescendantAdded:Connect(onShedAdded)
+    State.shedChildRemovedConn = Workspace.DescendantRemoving:Connect(onShedRemoved)
+    for _, child in ipairs(Workspace:GetDescendants()) do onShedAdded(child) end
 end
 local function stopShedESP()
     State.shedESPActive = false
@@ -536,51 +546,51 @@ local function stopShedESP()
     State.shedHighlights, State.shedBillboards = {}, {}
 end
 
--- ==================== AIRDROP ESP (FIXED) ====================
+-- ==================== AIRDROP ESP ====================
 local function onAirdropAdded(model)
-    if model.Name == "Airdrop" and model:IsA("Model") and not State.airdropHighlights[model] then
-        local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
-        if not adornPart then return end
+    if not model:IsA("Model") or model.Name ~= "Airdrop" then return end
+    if State.airdropHighlights[model] then return end
+    local adornPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
+    if not adornPart then return end
 
-        local hl = Instance.new("Highlight")
-        hl.FillColor = Color3.fromRGB(255, 0, 255)
-        hl.OutlineColor = Color3.fromRGB(255, 255, 0)
-        hl.FillTransparency = 0.2
-        hl.OutlineTransparency = 0
-        hl.Adornee = adornPart
-        hl.Parent = adornPart
-        State.airdropHighlights[model] = hl
+    local hl = Instance.new("Highlight")
+    hl.FillColor = Color3.fromRGB(255, 0, 255)
+    hl.OutlineColor = Color3.fromRGB(255, 255, 0)
+    hl.FillTransparency = 0.2
+    hl.OutlineTransparency = 0
+    hl.Adornee = model
+    hl.Parent = model
+    State.airdropHighlights[model] = hl
 
-        local bb = Instance.new("BillboardGui")
-        bb.Size = UDim2.new(0, 90, 0, 20)
-        bb.StudsOffset = Vector3.new(0, 3, 0)
-        bb.AlwaysOnTop = true
-        bb.ResetOnSpawn = false
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = "AIRDROP"
-        lbl.TextColor3 = Color3.fromRGB(255, 0, 255)
-        lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        lbl.TextStrokeTransparency = 0
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 10
-        lbl.Parent = bb
-        bb.Parent = adornPart
-        State.airdropBillboards[model] = bb
-    end
+    local bb = Instance.new("BillboardGui")
+    bb.Size = UDim2.new(0, 90, 0, 20)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.ResetOnSpawn = false
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "AIRDROP"
+    lbl.TextColor3 = Color3.fromRGB(255, 0, 255)
+    lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    lbl.TextStrokeTransparency = 0
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 10
+    lbl.Parent = bb
+    bb.Parent = adornPart
+    State.airdropBillboards[model] = bb
 end
 local function onAirdropRemoved(model)
-    if model.Name ~= "Airdrop" then return end
+    if not model:IsA("Model") or model.Name ~= "Airdrop" then return end
     if State.airdropHighlights[model] then State.airdropHighlights[model]:Destroy(); State.airdropHighlights[model] = nil end
     if State.airdropBillboards[model] then State.airdropBillboards[model]:Destroy(); State.airdropBillboards[model] = nil end
 end
 local function startAirdropESP()
     if State.airdropESPActive then return end
     State.airdropESPActive = true
-    State.airdropChildAddedConn = Workspace.ChildAdded:Connect(onAirdropAdded)
-    State.airdropChildRemovedConn = Workspace.ChildRemoved:Connect(onAirdropRemoved)
-    for _, child in ipairs(Workspace:GetChildren()) do onAirdropAdded(child) end
+    State.airdropChildAddedConn = Workspace.DescendantAdded:Connect(onAirdropAdded)
+    State.airdropChildRemovedConn = Workspace.DescendantRemoving:Connect(onAirdropRemoved)
+    for _, child in ipairs(Workspace:GetDescendants()) do onAirdropAdded(child) end
 end
 local function stopAirdropESP()
     State.airdropESPActive = false
@@ -591,7 +601,7 @@ local function stopAirdropESP()
     State.airdropHighlights, State.airdropBillboards = {}, {}
 end
 
--- ==================== BLACK MARKET ESP (FIXED) ====================
+-- ==================== BLACK MARKET ESP ====================
 local function isBlackMarket(instance)
     if not instance or not instance:IsA("Model") then return false end
     if instance.Name ~= "BlackMarket" then return false end
@@ -615,8 +625,8 @@ local function applyBlackMarketESP(instance)
     hl.OutlineColor = Color3.fromRGB(255, 255, 255)
     hl.FillTransparency = 0.2
     hl.OutlineTransparency = 0
-    hl.Adornee = adornPart
-    hl.Parent = adornPart
+    hl.Adornee = instance
+    hl.Parent = instance
     State.blackMarketHighlights[instance] = hl
 
     local bb = Instance.new("BillboardGui")
@@ -694,8 +704,8 @@ end
 local function startStructNotifier()
     if State.structNotifierActive then return end
     State.structNotifierActive = true
-    local shedConn = Workspace.ChildAdded:Connect(notifyShed)
-    local airdropConn = Workspace.ChildAdded:Connect(notifyAirdrop)
+    local shedConn = Workspace.DescendantAdded:Connect(notifyShed)
+    local airdropConn = Workspace.DescendantAdded:Connect(notifyAirdrop)
     local blackMarketConn = Workspace.DescendantAdded:Connect(function(desc)
         if isBlackMarket(desc) then
             Library:Notify("Black Market spawned!", 3)
@@ -714,7 +724,7 @@ local function startStructNotifier()
         end)
     end
     State.structNotifierConnections = { shedConn, airdropConn, blackMarketConn, scrapConn }
-    for _, child in ipairs(Workspace:GetChildren()) do
+    for _, child in ipairs(Workspace:GetDescendants()) do
         notifyShed(child)
         notifyAirdrop(child)
     end
@@ -837,7 +847,7 @@ local function stopRagdollRemover()
     restoreRagdollParts()
 end
 
--- ==================== FULLBRIGHT (restores fog when off) ====================
+-- ==================== FULLBRIGHT ====================
 local function applyFullbright()
     if State.fullbrightActive then
         Lighting.Brightness = 1
@@ -880,7 +890,7 @@ local function stopFullbright()
     applyFullbright()
 end
 
--- ==================== INSTANT PROX. PROMPTS (with exception) ====================
+-- ==================== INSTANT PROX. PROMPTS ====================
 local INSTANT_PROX_DURATION = 0
 local EXCEPTION_PROX_DURATION = 0.0001
 
@@ -1380,16 +1390,6 @@ local Window = Library:CreateWindow({
     MenuFadeTime = 0.2
 })
 
--- On mobile, disable drag to avoid touch conflicts
-if IS_MOBILE and Window and Window.Frame then
-    Window.Frame.Draggable = false
-    -- Also make the window slightly larger for touch
-    Window.Frame.Size = UDim2.new(0, 450, 0, 550)
-end
-
-local gui = playerGui:FindFirstChild("Linoria")
-if gui then gui.Name = "RevenantSunrisenGui" end
-
 local Tabs = {
     Main = Window:AddTab('Main'),
     Scraps = Window:AddTab('Scraps & Teleports'),
@@ -1818,20 +1818,18 @@ ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
 
 -- ===== AFTER LOADING CONFIG: FORCE CORRECT STATES =====
-if not Toggles.Hitbox.Value then
-    State.hitboxEnabled = false
-    removeHitboxAll()
-else
-    State.hitboxEnabled = true
+State.hitboxEnabled = Toggles.Hitbox.Value
+if State.hitboxEnabled then
     applyHitboxAll()
+else
+    removeHitboxAll()
 end
 
-if not Toggles.NPCESP.Value then
-    State.espEnabled = false
-    removeESPAll()
-else
-    State.espEnabled = true
+State.espEnabled = Toggles.NPCESP.Value
+if State.espEnabled then
     applyESPAll()
+else
+    removeESPAll()
 end
 
 if not Toggles.Fullbright.Value then
@@ -1840,18 +1838,18 @@ else
     startFullbright()
 end
 
-if Toggles.LoopAmmo.Value then startAmmoLoop() end
-if Toggles.NoRecoil.Value then enableNoRecoil() end
-if Toggles.ShedESP.Value then startShedESP() end
-if Toggles.AirdropESP.Value then startAirdropESP() end
-if Toggles.BlackMarketESP.Value then startBlackMarketESP() end
-if Toggles.StructureNotifier.Value then startStructNotifier() end
-if Toggles.RemoveBarbedWire.Value then startBarbedWireRemover() end
-if Toggles.RemoveRagdoll.Value then startRagdollRemover() end
-if Toggles.ScrapESP.Value then startScrapESP() end
-if Toggles.ScrapTP.Value then startScrapTP() end
-if Toggles.InstantProx.Value then startInstantProx() end
-if Toggles.OrbitSpin.Value then startOrbit() end
+if Toggles.LoopAmmo.Value then startAmmoLoop() else stopAmmoLoop() end
+if Toggles.NoRecoil.Value then enableNoRecoil() else disableNoRecoil() end
+if Toggles.ShedESP.Value then startShedESP() else stopShedESP() end
+if Toggles.AirdropESP.Value then startAirdropESP() else stopAirdropESP() end
+if Toggles.BlackMarketESP.Value then startBlackMarketESP() else stopBlackMarketESP() end
+if Toggles.StructureNotifier.Value then startStructNotifier() else stopStructNotifier() end
+if Toggles.RemoveBarbedWire.Value then startBarbedWireRemover() else stopBarbedWireRemover() end
+if Toggles.RemoveRagdoll.Value then startRagdollRemover() else stopRagdollRemover() end
+if Toggles.ScrapESP.Value then startScrapESP() else stopScrapESP() end
+if Toggles.ScrapTP.Value then startScrapTP() else stopScrapTP() end
+if Toggles.InstantProx.Value then startInstantProx() else stopInstantProx() end
+if Toggles.OrbitSpin.Value then startOrbit() else stopOrbit() end
 
 Library:OnUnload(function()
     destroyEverything()
@@ -1862,90 +1860,4 @@ player.CharacterAdded:Connect(function()
     if State.espEnabled then applyESPAll() end
 end)
 
--- ==================== MOBILE TOGGLE BUTTON (FIXED) ====================
-if IS_MOBILE then
-    -- Wait for Linoria GUI to exist
-    local linoriaGui = playerGui:WaitForChild("Linoria")
-
-    -- Create toggle button GUI
-    local toggleGui = Instance.new("ScreenGui")
-    toggleGui.Name = "MobileToggleGui"
-    toggleGui.ResetOnSpawn = false
-    toggleGui.Parent = playerGui
-    toggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 80, 0, 80)
-    frame.Position = UDim2.new(1, -90, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.BackgroundTransparency = 0.1
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    frame.Parent = toggleGui
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text = "Close"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 16
-    btn.Font = Enum.Font.GothamBold
-    btn.Parent = frame
-
-    -- Update text based on GUI visibility
-    local function updateButtonText()
-        btn.Text = linoriaGui.Enabled and "Close" or "Open"
-    end
-    updateButtonText()
-
-    -- Toggle function
-    local function toggleGuiVisibility()
-        linoriaGui.Enabled = not linoriaGui.Enabled
-        updateButtonText()
-    end
-
-    -- Connect both touch and mouse clicks
-    btn.MouseButton1Click:Connect(toggleGuiVisibility)
-    btn.TouchTap:Connect(toggleGuiVisibility)
-
-    -- Make the frame draggable on mobile
-    local dragging = false
-    local dragStart, frameStart
-
-    frame.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            frameStart = frame.Position
-        end
-    end)
-
-    frame.InputChanged:Connect(function(input, gameProcessed)
-        if gameProcessed or not dragging then return end
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                frameStart.X.Scale,
-                frameStart.X.Offset + delta.X,
-                frameStart.Y.Scale,
-                frameStart.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    frame.InputEnded:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    -- Also update button text when the GUI is toggled elsewhere (e.g., via keybind)
-    linoriaGui:GetPropertyChangedSignal("Enabled"):Connect(updateButtonText)
-end
-
--- ==================== DEVICE NOTIFICATION ====================
-local deviceType = IS_MOBILE and "Mobile" or "PC"
-Library:Notify(string.format("Script loaded. Device: %s", deviceType), 3)
-print("The Revenant: Sunrisen Gui loaded successfully! Device: " .. deviceType)
+print("The Revenant: Sunrisen Gui (PC) loaded successfully!")
