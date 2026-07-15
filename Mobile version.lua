@@ -1,4 +1,4 @@
--- The Revenant: Sunrisen GUI (Mobile version)
+-- The Revenant: Sunrisen GUI (Mobile Version)
 -- Made using Rayfield V2 Library
 
 if _G.RevenantGui_Kill then
@@ -15,7 +15,7 @@ local Window = Rayfield:CreateWindow({
     Name = "The Revenant: Sunrisen GUI (Mobile Version)",
     Icon = 0,
     LoadingTitle = "Loading Revenant GUI",
-    LoadingSubtitle = "Mobile version",
+    LoadingSubtitle = "Mobile Version",
     Theme = "Default",
 
     DisableRayfieldPrompts = false,
@@ -1874,10 +1874,16 @@ end
 local teleportListDropdown
 local function updateTeleportList()
     local names = {}
-    for _, data in pairs(savedPositions) do table.insert(names, data.name) end
+    for _, data in pairs(savedPositions) do
+        table.insert(names, data.name)
+    end
     table.sort(names)
     if teleportListDropdown then
-        teleportListDropdown:Set(names)  -- fixed method
+        if #names > 0 then
+            teleportListDropdown:Set(names)
+        else
+            teleportListDropdown:Set({"No saved positions"})
+        end
     end
 end
 
@@ -1947,8 +1953,8 @@ ScrapsTab:CreateButton({
 local settingsSection = SettingsTab:CreateSection("General Settings")
 
 SettingsTab:CreateLabel("The Revenant: Sunrisen Gui")
-SettingsTab:CreateLabel("Mobile version")
-SettingsTab:CreateLabel("version 1.1")
+SettingsTab:CreateLabel("Mobile Version")
+SettingsTab:CreateLabel("Version 1.1")
 
 SettingsTab:CreateDivider()
 
@@ -2016,6 +2022,6 @@ SettingsTab:CreateButton({
 -- ==================== LOAD CONFIGURATION ====================
 Rayfield:LoadConfiguration()
 
-Notify("Loaded", "The Revenant: Sunrisen Gui (Mobile Version)")
+Notify("Loaded", "The Revenant: Sunrisen Mobile")
 
-print("The Revenant: Sunrisen GUI (Mobile) loaded successfully!")
+print("The Revenant: Sunrisen GUI (Mobile Version) loaded successfully!")
