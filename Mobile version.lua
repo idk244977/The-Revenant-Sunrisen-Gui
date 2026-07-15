@@ -12,7 +12,7 @@ local function isKilled() return _G.RevenantGui_Kill end
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "The Revenant: Sunrisen GUI (Mobile version)",
+    Name = "The Revenant: Sunrisen GUI (Mobile Version)",
     Icon = 0,
     LoadingTitle = "Loading Revenant GUI",
     LoadingSubtitle = "Mobile version",
@@ -45,15 +45,24 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
--- ==================== ИКОНКИ ДЛЯ ТАБОВ ====================
-local MainTab = Window:CreateTab("Main", "swords")      -- мечи
-local ScrapsTab = Window:CreateTab("Scraps", "package") -- посылка
-local SettingsTab = Window:CreateTab("Settings", "cog") -- шестерёнка
+-- ==================== TAB ICONS ====================
+local MainTab = Window:CreateTab("Main", "swords")
+local ScrapsTab = Window:CreateTab("Scraps", "package")
+local SettingsTab = Window:CreateTab("Settings", "cog")
 
--- ==================== ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ====================
--- (весь код из предыдущего ответа, начиная от подключения сервисов и до конца)
--- Я приведу его целиком, чтобы вы могли скопировать сразу.
+-- ==================== GLOBAL NOTIFICATION DURATION ====================
+local notificationDuration = 3
 
+local function Notify(Title, Content, Duration)
+    local dur = Duration or notificationDuration
+    Rayfield:Notify({
+        Title = Title,
+        Content = Content,
+        Duration = dur
+    })
+end
+
+-- ==================== SERVICES, STATE, FUNCTIONS ====================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
@@ -62,12 +71,10 @@ local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ==================== CONFIG ====================
 local NPC_FOLDER_NAME = "NPCs"
 local HEAD_SIZE_MAX = 6.2
 local AMMO_LOOP_DELAY = 0.3
 
--- ==================== CAPTURE ORIGINAL LIGHTING ====================
 local originalLighting = {
     Brightness = Lighting.Brightness,
     ClockTime = Lighting.ClockTime,
@@ -77,7 +84,6 @@ local originalLighting = {
     OutdoorAmbient = Lighting.OutdoorAmbient
 }
 
--- ==================== STATE TABLE ====================
 local State = {
     originalSizes = {},
     selectionBoxes = {},
@@ -441,7 +447,7 @@ local function removeESPAll()
     end
 end
 
--- ==================== AMMO (USING GLOBAL firesignal) ====================
+-- ==================== AMMO ====================
 local function getEquippedTool()
     local char = player.Character
     if char then
@@ -486,31 +492,19 @@ local function stopAmmoLoop()
     if State.ammoLoopThread then State.ammoLoopThread = nil end
 end
 
--- ==================== INFINITE STAMINA (USING GLOBAL firesignal) ====================
+-- ==================== INFINITE STAMINA ====================
 local function getInfStamina()
     local events = ReplicatedStorage:FindFirstChild("Events")
     if not events then
-        Rayfield:Notify({
-            Title = "Error",
-            Content = "Events folder not found!",
-            Duration = 3
-        })
+        Notify("Error", "Events folder not found!")
         return
     end
     local remoteEvent = events:FindFirstChild("I__NFSTA_AXDLOL")
     if remoteEvent and remoteEvent:IsA("RemoteEvent") then
         pcall(firesignal, remoteEvent.OnClientEvent, true, math.huge)
-        Rayfield:Notify({
-            Title = "Stamina",
-            Content = "Infinite Stamina activated!",
-            Duration = 2
-        })
+        Notify("Stamina", "Infinite Stamina activated!")
     else
-        Rayfield:Notify({
-            Title = "Error",
-            Content = "Stamina remote not found!",
-            Duration = 3
-        })
+        Notify("Error", "Stamina remote not found!")
     end
 end
 
@@ -521,11 +515,7 @@ local originalAccelerate = nil
 
 local function enableNoRecoil()
     if not Recoil then
-        Rayfield:Notify({
-            Title = "Error",
-            Content = "Recoil module not found!",
-            Duration = 3
-        })
+        Notify("Error", "Recoil module not found!")
         return
     end
     if not originalAccelerate then
@@ -533,11 +523,7 @@ local function enableNoRecoil()
         Recoil.Accelerate = function(self, ...)
             return {}
         end
-        Rayfield:Notify({
-            Title = "No Recoil",
-            Content = "Enabled",
-            Duration = 2
-        })
+        Notify("No Recoil", "Enabled")
     end
 end
 
@@ -545,11 +531,7 @@ local function disableNoRecoil()
     if Recoil and originalAccelerate then
         Recoil.Accelerate = originalAccelerate
         originalAccelerate = nil
-        Rayfield:Notify({
-            Title = "No Recoil",
-            Content = "Disabled",
-            Duration = 2
-        })
+        Notify("No Recoil", "Disabled")
     end
 end
 
@@ -738,29 +720,17 @@ end
 -- ==================== STRUCTURE NOTIFIER ====================
 local function notifyShed(model)
     if model.Name == "Shed" and model:IsA("Model") then
-        Rayfield:Notify({
-            Title = "Structure",
-            Content = "Shed spawned!",
-            Duration = 3
-        })
+        Notify("Structure", "Shed spawned!")
     end
 end
 local function notifyAirdrop(model)
     if model.Name == "Airdrop" and model:IsA("Model") then
-        Rayfield:Notify({
-            Title = "Structure",
-            Content = "Airdrop spawned!",
-            Duration = 3
-        })
+        Notify("Structure", "Airdrop spawned!")
     end
 end
 local function notifyBlackMarket(instance)
     if isBlackMarket(instance) then
-        Rayfield:Notify({
-            Title = "Structure",
-            Content = "Black Market spawned!",
-            Duration = 3
-        })
+        Notify("Structure", "Black Market spawned!")
     end
 end
 local function notifyCursedScrap(scrapObject)
@@ -769,11 +739,7 @@ local function notifyCursedScrap(scrapObject)
         if prompt and prompt:IsA("ProximityPrompt") then
             local typ = getScrapType(prompt)
             if typ == "Cursed" then
-                Rayfield:Notify({
-                    Title = "Scrap",
-                    Content = "Cursed Scrap spawned!",
-                    Duration = 3
-                })
+                Notify("Scrap", "Cursed Scrap spawned!")
             end
         end
     end
@@ -786,11 +752,7 @@ local function startStructNotifier()
     local airdropConn = Workspace.DescendantAdded:Connect(notifyAirdrop)
     local blackMarketConn = Workspace.DescendantAdded:Connect(function(desc)
         if isBlackMarket(desc) then
-            Rayfield:Notify({
-                Title = "Structure",
-                Content = "Black Market spawned!",
-                Duration = 3
-            })
+            Notify("Structure", "Black Market spawned!")
         end
     end)
     local scrapFolder = getScrapFolder()
@@ -812,11 +774,7 @@ local function startStructNotifier()
     end
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if isBlackMarket(desc) then
-            Rayfield:Notify({
-                Title = "Structure",
-                Content = "Black Market spawned!",
-                Duration = 3
-            })
+            Notify("Structure", "Black Market spawned!")
         end
     end
     if scrapFolder then
@@ -1392,38 +1350,22 @@ end
 local function teleportToStructure(name, strictParentCheck)
     local structure = findNearestStructure(name, strictParentCheck)
     if not structure then
-        Rayfield:Notify({
-            Title = "Teleport",
-            Content = "No " .. name .. " found nearby!",
-            Duration = 3
-        })
+        Notify("Teleport", "No " .. name .. " found nearby!")
         return
     end
     local root = structure:FindFirstChild("HumanoidRootPart") or structure.PrimaryPart or structure:FindFirstChild("Head")
     if not root or not root:IsA("BasePart") then
-        Rayfield:Notify({
-            Title = "Teleport",
-            Content = "Cannot find root part of " .. name,
-            Duration = 3
-        })
+        Notify("Teleport", "Cannot find root part of " .. name)
         return
     end
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then
-        Rayfield:Notify({
-            Title = "Teleport",
-            Content = "No character",
-            Duration = 3
-        })
+        Notify("Teleport", "No character")
         return
     end
     local targetPos = root.Position + Vector3.new(0, 5, 0)
     char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
-    Rayfield:Notify({
-        Title = "Teleport",
-        Content = "Teleported to " .. name,
-        Duration = 2
-    })
+    Notify("Teleport", "Teleported to " .. name)
 end
 
 -- ==================== FOLDER LISTENERS ====================
@@ -1480,9 +1422,7 @@ local function destroyEverything()
     State.destroying = false
 end
 
--- ==================== СОЗДАНИЕ ТАБОВ И ЭЛЕМЕНТОВ ====================
--- Табы уже созданы в начале с иконками: MainTab, ScrapsTab, SettingsTab
-
+-- ==================== CREATE UI ELEMENTS ====================
 -- ========== MAIN TAB ==========
 local npcSection = MainTab:CreateSection("NPC Features")
 
@@ -1493,10 +1433,10 @@ MainTab:CreateToggle({
         State.hitboxEnabled = Value
         if State.hitboxEnabled then
             applyHitboxAll()
-            Rayfield:Notify({ Title = "Hitbox", Content = "Enabled", Duration = 1 })
+            Notify("Hitbox", "Enabled")
         else
             removeHitboxAll()
-            Rayfield:Notify({ Title = "Hitbox", Content = "Disabled", Duration = 1 })
+            Notify("Hitbox", "Disabled")
         end
     end
 })
@@ -1523,10 +1463,10 @@ MainTab:CreateToggle({
         State.espEnabled = Value
         if State.espEnabled then
             applyESPAll()
-            Rayfield:Notify({ Title = "NPC ESP", Content = "Enabled", Duration = 1 })
+            Notify("NPC ESP", "Enabled")
         else
             removeESPAll()
-            Rayfield:Notify({ Title = "NPC ESP", Content = "Disabled", Duration = 1 })
+            Notify("NPC ESP", "Disabled")
         end
     end
 })
@@ -1537,10 +1477,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startOrbit()
-            Rayfield:Notify({ Title = "Orbit", Content = "Enabled", Duration = 1 })
+            Notify("Orbit", "Enabled")
         else
             stopOrbit()
-            Rayfield:Notify({ Title = "Orbit", Content = "Disabled", Duration = 1 })
+            Notify("Orbit", "Disabled")
         end
     end
 })
@@ -1573,7 +1513,7 @@ MainTab:CreateButton({
     Name = "Give Ammo",
     Callback = function()
         giveAmmoOnce()
-        Rayfield:Notify({ Title = "Ammo", Content = "Given", Duration = 1 })
+        Notify("Ammo", "Given")
     end
 })
 
@@ -1583,10 +1523,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startAmmoLoop()
-            Rayfield:Notify({ Title = "Loop Ammo", Content = "Enabled", Duration = 1 })
+            Notify("Loop Ammo", "Enabled")
         else
             stopAmmoLoop()
-            Rayfield:Notify({ Title = "Loop Ammo", Content = "Disabled", Duration = 1 })
+            Notify("Loop Ammo", "Disabled")
         end
     end
 })
@@ -1618,10 +1558,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startFullbright()
-            Rayfield:Notify({ Title = "Fullbright", Content = "Enabled", Duration = 1 })
+            Notify("Fullbright", "Enabled")
         else
             stopFullbright()
-            Rayfield:Notify({ Title = "Fullbright", Content = "Disabled", Duration = 1 })
+            Notify("Fullbright", "Disabled")
         end
     end
 })
@@ -1632,10 +1572,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startInstantProx()
-            Rayfield:Notify({ Title = "Instant Prox", Content = "Enabled", Duration = 1 })
+            Notify("Instant Prox", "Enabled")
         else
             stopInstantProx()
-            Rayfield:Notify({ Title = "Instant Prox", Content = "Disabled", Duration = 1 })
+            Notify("Instant Prox", "Disabled")
         end
     end
 })
@@ -1648,10 +1588,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startShedESP()
-            Rayfield:Notify({ Title = "Shed ESP", Content = "Enabled", Duration = 1 })
+            Notify("Shed ESP", "Enabled")
         else
             stopShedESP()
-            Rayfield:Notify({ Title = "Shed ESP", Content = "Disabled", Duration = 1 })
+            Notify("Shed ESP", "Disabled")
         end
     end
 })
@@ -1662,10 +1602,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startAirdropESP()
-            Rayfield:Notify({ Title = "Airdrop ESP", Content = "Enabled", Duration = 1 })
+            Notify("Airdrop ESP", "Enabled")
         else
             stopAirdropESP()
-            Rayfield:Notify({ Title = "Airdrop ESP", Content = "Disabled", Duration = 1 })
+            Notify("Airdrop ESP", "Disabled")
         end
     end
 })
@@ -1676,10 +1616,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startBlackMarketESP()
-            Rayfield:Notify({ Title = "Black Market ESP", Content = "Enabled", Duration = 1 })
+            Notify("Black Market ESP", "Enabled")
         else
             stopBlackMarketESP()
-            Rayfield:Notify({ Title = "Black Market ESP", Content = "Disabled", Duration = 1 })
+            Notify("Black Market ESP", "Disabled")
         end
     end
 })
@@ -1690,10 +1630,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startStructNotifier()
-            Rayfield:Notify({ Title = "Notifier", Content = "Enabled", Duration = 1 })
+            Notify("Notifier", "Enabled")
         else
             stopStructNotifier()
-            Rayfield:Notify({ Title = "Notifier", Content = "Disabled", Duration = 1 })
+            Notify("Notifier", "Disabled")
         end
     end
 })
@@ -1704,10 +1644,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startBarbedWireRemover()
-            Rayfield:Notify({ Title = "Barbed Wire", Content = "Removed", Duration = 1 })
+            Notify("Barbed Wire", "Removed")
         else
             stopBarbedWireRemover()
-            Rayfield:Notify({ Title = "Barbed Wire", Content = "Restored", Duration = 1 })
+            Notify("Barbed Wire", "Restored")
         end
     end
 })
@@ -1718,10 +1658,10 @@ MainTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startRagdollRemover()
-            Rayfield:Notify({ Title = "Ragdoll", Content = "Removed", Duration = 1 })
+            Notify("Ragdoll", "Removed")
         else
             stopRagdollRemover()
-            Rayfield:Notify({ Title = "Ragdoll", Content = "Restored", Duration = 1 })
+            Notify("Ragdoll", "Restored")
         end
     end
 })
@@ -1735,10 +1675,10 @@ ScrapsTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startScrapESP()
-            Rayfield:Notify({ Title = "Scrap ESP", Content = "Enabled", Duration = 1 })
+            Notify("Scrap ESP", "Enabled")
         else
             stopScrapESP()
-            Rayfield:Notify({ Title = "Scrap ESP", Content = "Disabled", Duration = 1 })
+            Notify("Scrap ESP", "Disabled")
         end
     end
 })
@@ -1797,10 +1737,10 @@ ScrapsTab:CreateToggle({
     Callback = function(Value)
         if Value then
             startScrapTP()
-            Rayfield:Notify({ Title = "Scrap TP", Content = "Enabled", Duration = 1 })
+            Notify("Scrap TP", "Enabled")
         else
             stopScrapTP()
-            Rayfield:Notify({ Title = "Scrap TP", Content = "Disabled", Duration = 1 })
+            Notify("Scrap TP", "Disabled")
         end
     end
 })
@@ -1837,7 +1777,7 @@ ScrapsTab:CreateButton({
     Name = "TP to Shop",
     Callback = function()
         teleportTo(SHOP_POS)
-        Rayfield:Notify({ Title = "Teleport", Content = "To Shop", Duration = 1 })
+        Notify("Teleport", "To Shop")
     end
 })
 
@@ -1845,7 +1785,7 @@ ScrapsTab:CreateButton({
     Name = "TP to Power Station",
     Callback = function()
         teleportTo(POWER_STATION)
-        Rayfield:Notify({ Title = "Teleport", Content = "To Power Station", Duration = 1 })
+        Notify("Teleport", "To Power Station")
     end
 })
 
@@ -1853,7 +1793,7 @@ ScrapsTab:CreateButton({
     Name = "TP to Lake",
     Callback = function()
         teleportTo(LAKE)
-        Rayfield:Notify({ Title = "Teleport", Content = "To Lake", Duration = 1 })
+        Notify("Teleport", "To Lake")
     end
 })
 
@@ -1861,7 +1801,7 @@ ScrapsTab:CreateButton({
     Name = "TP to Bunker",
     Callback = function()
         teleportTo(BUNKER)
-        Rayfield:Notify({ Title = "Teleport", Content = "To Bunker", Duration = 1 })
+        Notify("Teleport", "To Bunker")
     end
 })
 
@@ -1869,7 +1809,7 @@ ScrapsTab:CreateButton({
     Name = "TP Inside Bunker",
     Callback = function()
         teleportTo(BUNKER_INSIDE)
-        Rayfield:Notify({ Title = "Teleport", Content = "Inside Bunker", Duration = 1 })
+        Notify("Teleport", "Inside Bunker")
     end
 })
 
@@ -1877,7 +1817,7 @@ ScrapsTab:CreateButton({
     Name = "TP to Scrap Building",
     Callback = function()
         teleportTo(SCRAP_BUILDING)
-        Rayfield:Notify({ Title = "Teleport", Content = "To Scrap Building", Duration = 1 })
+        Notify("Teleport", "To Scrap Building")
     end
 })
 
@@ -1926,7 +1866,7 @@ local function teleportToSaved(name)
         local char = player.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             char.HumanoidRootPart.CFrame = CFrame.new(data.pos)
-            Rayfield:Notify({ Title = "Teleport", Content = "To " .. name, Duration = 1 })
+            Notify("Teleport", "To " .. name)
         end
     end
 end
@@ -1937,7 +1877,7 @@ local function updateTeleportList()
     for _, data in pairs(savedPositions) do table.insert(names, data.name) end
     table.sort(names)
     if teleportListDropdown then
-        teleportListDropdown:SetOptions(names)
+        teleportListDropdown:Set(names)  -- fixed method
     end
 end
 
@@ -1956,14 +1896,14 @@ ScrapsTab:CreateButton({
     Callback = function()
         local name = _G.customTeleportName or generateDefaultName()
         if savedPositions[name] then
-            Rayfield:Notify({ Title = "Error", Content = "Name already exists!", Duration = 2 })
+            Notify("Error", "Name already exists!")
             return
         end
         if saveCurrentPosition(name) then
             updateTeleportList()
-            Rayfield:Notify({ Title = "Saved", Content = "Position " .. name, Duration = 2 })
+            Notify("Saved", "Position " .. name)
         else
-            Rayfield:Notify({ Title = "Error", Content = "Failed to save (no character?)", Duration = 2 })
+            Notify("Error", "Failed to save (no character?)")
         end
     end
 })
@@ -1984,7 +1924,7 @@ ScrapsTab:CreateButton({
         if _G.selectedTeleport then
             teleportToSaved(_G.selectedTeleport)
         else
-            Rayfield:Notify({ Title = "Error", Content = "No position selected", Duration = 2 })
+            Notify("Error", "No position selected")
         end
     end
 })
@@ -1995,32 +1935,87 @@ ScrapsTab:CreateButton({
         if _G.selectedTeleport and savedPositions[_G.selectedTeleport] then
             deleteSavedPosition(_G.selectedTeleport)
             updateTeleportList()
-            Rayfield:Notify({ Title = "Deleted", Content = _G.selectedTeleport, Duration = 2 })
+            Notify("Deleted", _G.selectedTeleport)
             _G.selectedTeleport = nil
         else
-            Rayfield:Notify({ Title = "Error", Content = "No position selected or does not exist", Duration = 2 })
+            Notify("Error", "No position selected or does not exist")
         end
     end
 })
 
 -- ========== SETTINGS TAB ==========
+local settingsSection = SettingsTab:CreateSection("General Settings")
+
+SettingsTab:CreateLabel("The Revenant: Sunrisen Gui")
+SettingsTab:CreateLabel("Mobile version")
+SettingsTab:CreateLabel("version 1.1")
+
+SettingsTab:CreateDivider()
+
+local themeDropdown = SettingsTab:CreateDropdown({
+    Name = "Theme",
+    Options = {"Default", "Ocean", "Serpents", "Amethyst", "Midnight", "Synthwave"},
+    CurrentOption = "Default",
+    Callback = function(Option)
+        pcall(function()
+            Rayfield:SetTheme(Option)
+        end)
+        Notify("Theme", "Changed to " .. Option)
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name = "Notification Duration",
+    Range = {1, 10},
+    Increment = 1,
+    Suffix = " sec",
+    CurrentValue = 3,
+    Callback = function(Value)
+        notificationDuration = Value
+        Notify("Duration", "Set to " .. Value .. " seconds")
+    end
+})
+
+SettingsTab:CreateDivider()
+
+SettingsTab:CreateButton({
+    Name = "Reset Configuration & Restart",
+    Callback = function()
+        local success, err = pcall(function()
+            if isfolder and isfolder("RevenantSunrisenMobile") then
+                delfolder("RevenantSunrisenMobile")
+            end
+            if isfolder and isfolder("Rayfield") then
+                local configPath = "Rayfield/RevenantSunrisenMobile_Config.json"
+                if isfile and isfile(configPath) then
+                    delfile(configPath)
+                end
+            end
+        end)
+        Notify("Reset", "Configuration reset, restarting...")
+        task.wait(1)
+        -- Replace with your script URL
+        local script = game:HttpGet("https://raw.githubusercontent.com/your-repo/script.lua")
+        loadstring(script)()
+        Rayfield:Destroy()
+        _G.RevenantGui_Kill = true
+    end
+})
+
 SettingsTab:CreateButton({
     Name = "Unload Script",
     Callback = function()
         destroyEverything()
         Rayfield:Destroy()
-        Rayfield:Notify({ Title = "Unloaded", Content = "Script unloaded", Duration = 2 })
+        Notify("Unloaded", "Script unloaded")
+        task.wait(0.5)
+        _G.RevenantGui_Kill = true
     end
 })
 
--- ==================== ЗАГРУЗКА СОХРАНЁННЫХ НАСТРОЕК ====================
+-- ==================== LOAD CONFIGURATION ====================
 Rayfield:LoadConfiguration()
 
--- Уведомление о загрузке
-Rayfield:Notify({
-    Title = "Loaded",
-    Content = "The Revenant: Sunrisen Mobile",
-    Duration = 3
-})
+Notify("Loaded", "The Revenant: Sunrisen Gui (Mobile Version)")
 
 print("The Revenant: Sunrisen GUI (Mobile) loaded successfully!")
